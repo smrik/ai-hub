@@ -167,6 +167,8 @@ function Select-MenuOption {
     
     # ANSI codes
     $esc = [char]27
+    $hideCursor = "$esc[?25l"
+    $showCursor = "$esc[?25h"
     $saveCursor = "$esc[s"
     $restoreCursor = "$esc[u" 
     $clearLine = "$esc[2K"
@@ -176,6 +178,9 @@ function Select-MenuOption {
     $cyan = "$esc[36m"
     $white = "$esc[97m"
     $gray = "$esc[90m"
+    
+    # Hide cursor for smooth updates
+    Write-Host -NoNewline $hideCursor
     
     # Box chars
     $tl = "╭"; $tr = "╮"; $bl = "╰"; $br = "╯"; $h = "─"; $v = "│"
@@ -258,10 +263,12 @@ function Select-MenuOption {
                 if ($selectedIndex -gt $maxIndex) { $selectedIndex = 0 }
             }
             "Enter" {
+                Write-Host -NoNewline $showCursor
                 Write-Host ""
                 return $selectableItems[$selectedIndex].Key
             }
             "Escape" {
+                Write-Host -NoNewline $showCursor
                 Write-Host ""
                 return "0"
             }
@@ -269,6 +276,7 @@ function Select-MenuOption {
                 $char = $key.KeyChar
                 $directItem = $selectableItems | Where-Object { $_.Key -eq $char }
                 if ($directItem) {
+                    Write-Host -NoNewline $showCursor
                     Write-Host ""
                     return $char
                 }
