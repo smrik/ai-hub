@@ -223,17 +223,22 @@ function Select-MenuOption {
             Write-Host -NoNewline $clearLine
             
             if ($item.Key -eq "") {
-                # Section header/divider
-                Write-Host "$gray$v$reset  $dim$($item.Label)$(" " * ($innerWidth - $item.Label.Length - 2))$reset$gray$v$reset"
+                # Section header/divider (no emoji)
+                $pad = $innerWidth - $item.Label.Length - 2
+                if ($pad -lt 0) { $pad = 0 }
+                Write-Host "$gray$v$reset  $dim$($item.Label)$reset$(" " * $pad)$gray$v$reset"
             }
             else {
                 $isSelected = ($selectableIndex -eq $selectedIndex)
                 $prefix = if ($isSelected) { "$cyan>" } else { " " }
                 $labelColor = if ($isSelected) { $white } else { $gray }
                 $itemText = "$($item.Icon) $($item.Label)"
-                $padding = $innerWidth - $itemText.Length - 2
+                # Emoji takes 2 display columns but .Length counts as 1, so subtract 1
+                $displayLen = $itemText.Length + 1
+                $pad = $innerWidth - $displayLen - 2
+                if ($pad -lt 0) { $pad = 0 }
                 
-                Write-Host "$gray$v$reset $prefix $labelColor$itemText$reset$(" " * $padding)$gray$v$reset"
+                Write-Host "$gray$v$reset $prefix $labelColor$itemText$reset$(" " * $pad)$gray$v$reset"
                 $selectableIndex++
             }
         }
