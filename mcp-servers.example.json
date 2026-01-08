@@ -1,0 +1,53 @@
+{
+    "$comment": "Example MCP server configuration - copy to mcp-servers.json and add your API keys",
+    "mcpServers": {
+        "brightData": {
+            "command": "npx",
+            "args": [
+                "-y",
+                "@brightdata/mcp"
+            ],
+            "env": {
+                "API_TOKEN": "YOUR_BRIGHTDATA_API_TOKEN",
+                "PRO_MODE": "true"
+            }
+        },
+        "perplexity": {
+            "command": "npx",
+            "args": [
+                "-y",
+                "@perplexity-ai/mcp-server"
+            ],
+            "env": {
+                "PERPLEXITY_API_KEY": "YOUR_PERPLEXITY_API_KEY"
+            }
+        },
+        "context7": {
+            "command": "cmd",
+            "args": [
+                "/c",
+                "npx",
+                "-y",
+                "@upstash/context7-mcp",
+                "--api-key",
+                "YOUR_CONTEXT7_API_KEY"
+            ],
+            "env": {
+                "SystemRoot": "C:\\Windows"
+            }
+        },
+        "excel-mcp-server": {
+            "command": "cmd",
+            "args": [
+                "/c",
+                "npx",
+                "-y",
+                "@smithery/cli@latest",
+                "run",
+                "@haris-musa/excel-mcp-server",
+                "--key",
+                "YOUR_SMITHERY_KEY"
+            ]
+        }
+    }
+}

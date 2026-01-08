@@ -1,0 +1,22 @@
+# Logs
+*.log
+ai-hub.log
+session-notes.log
+
+# Session state (project-specific)
+.agent/
+
+# Sensitive configs with API keys
+mcp-servers.json
+
+# Backup files
+*.bak
+*.bak.*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
