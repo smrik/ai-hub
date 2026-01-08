@@ -234,10 +234,8 @@ function Select-MenuOption {
                 $labelColor = if ($isSelected) { $white } else { $gray }
                 $itemText = "$($item.Icon) $($item.Label)"
                 
-                # Most emojis display as 2 columns but ✨ displays as 1
-                # Wide emojis: 🤖🚀🔄📝📋📊🏠👋🔗  Narrow: ✨
-                $emojiWidth = if ($item.Icon -eq "✨") { 0 } else { 1 }
-                $displayLen = $itemText.Length + $emojiWidth
+                # Emoji displays as 2 columns but .Length counts as 1
+                $displayLen = $itemText.Length + 1
                 $pad = $innerWidth - $displayLen - 2
                 if ($pad -lt 0) { $pad = 0 }
                 
@@ -302,7 +300,7 @@ function Show-MainMenu {
     $menuItems = @(
         @{ Key = ""; Label = "Agents"; Icon = ""; Color = "" }
         @{ Key = "1"; Label = "Claude Code"; Icon = "🤖" }
-        @{ Key = "2"; Label = "Gemini CLI"; Icon = "✨" }
+        @{ Key = "2"; Label = "Gemini CLI"; Icon = "💎" }
         @{ Key = "3"; Label = "Codex CLI"; Icon = "🚀" }
         @{ Key = ""; Label = "Tools"; Icon = ""; Color = "" }
         @{ Key = "4"; Label = "Sync all configs"; Icon = "🔄" }
