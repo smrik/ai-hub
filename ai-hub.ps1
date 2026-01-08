@@ -233,8 +233,11 @@ function Select-MenuOption {
                 $prefix = if ($isSelected) { "$cyan>" } else { " " }
                 $labelColor = if ($isSelected) { $white } else { $gray }
                 $itemText = "$($item.Icon) $($item.Label)"
-                # Emoji takes 2 display columns but .Length counts as 1, so subtract 1
-                $displayLen = $itemText.Length + 1
+                
+                # Most emojis display as 2 columns but ✨ displays as 1
+                # Wide emojis: 🤖🚀🔄📝📋📊🏠👋🔗  Narrow: ✨
+                $emojiWidth = if ($item.Icon -eq "✨") { 0 } else { 1 }
+                $displayLen = $itemText.Length + $emojiWidth
                 $pad = $innerWidth - $displayLen - 2
                 if ($pad -lt 0) { $pad = 0 }
                 
