@@ -152,8 +152,7 @@ function Write-Divider {
     Write-Styled -Text ($b.Horizontal * ($Width - 2)) -Color "BrightBlack" -NoNewLine
     Write-Styled -Text $b.RightT -Color "BrightBlack"
 }
-
-# Arrow key menu selection
+# Arrow key menu selection with proper in-place updates
 function Select-MenuOption {
     param(
         [array]$MenuItems,
@@ -165,15 +164,32 @@ function Select-MenuOption {
     $selectedIndex = 0
     $maxIndex = $selectableItems.Count - 1
     
+    # ANSI escape codes
+    $esc = [char]27
+    $saveCursor = "$esc[s"
+    $restoreCursor = "$esc[u"
+    $clearLine = "$esc[2K"
+    $reset = "$esc[0m"
+    
+    # Save cursor position before first draw
+    Write-Host -NoNewline $saveCursor
+    
+    # Initial draw
+    $firstDraw = $true
+    
     while ($true) {
-        # Clear and redraw menu
-        $cursorTop = [Console]::CursorTop - $MenuItems.Count - 2
-        if ($cursorTop -lt 0) { $cursorTop = 0 }
-        [Console]::SetCursorPosition(0, $cursorTop)
+        if (-not $firstDraw) {
+            # Restore cursor to saved position and redraw
+            Write-Host -NoNewline $restoreCursor
+        }
+        $firstDraw = $false
         
         Write-Host ""
         $selectableIndex = 0
         foreach ($item in $MenuItems) {
+            # Clear the line first
+            Write-Host -NoNewline $clearLine
+            
             if ($item.Key -eq "") {
                 # Divider
                 Write-Styled -Text "  $($item.Label)" -Color $item.Color
@@ -181,21 +197,22 @@ function Select-MenuOption {
             else {
                 $isSelected = ($selectableIndex -eq $selectedIndex)
                 $prefix = if ($isSelected) { "▶ " } else { "  " }
-                $bgColor = if ($isSelected) { "`e[48;5;236m" } else { "" }
+                $bg = if ($isSelected) { "$esc[48;5;236m" } else { "" }
                 
-                Write-Host -NoNewline $bgColor
+                Write-Host -NoNewline "$bg"
                 Write-Styled -Text $prefix -Color $(if ($isSelected) { "BrightCyan" } else { "BrightBlack" }) -NoNewLine
                 Write-Styled -Text "[" -Color "BrightBlack" -NoNewLine
                 Write-Styled -Text $item.Key -Color $(if ($isSelected) { "BrightCyan" } else { "BrightBlack" }) -Bold -NoNewLine
                 Write-Styled -Text "] " -Color "BrightBlack" -NoNewLine
                 Write-Styled -Text "$($item.Icon) " -NoNewLine
                 Write-Styled -Text $item.Label -Color $(if ($isSelected) { "BrightWhite" } else { $item.Color })
+                Write-Host -NoNewline $reset
                 $selectableIndex++
             }
         }
         Write-Host ""
+        Write-Host -NoNewline $clearLine
         Write-Styled -Text "  ↑↓ Navigate  Enter Select  # Direct" -Color "Dim"
-        Write-Host ""
         
         # Read key
         $key = [Console]::ReadKey($true)
@@ -210,13 +227,19 @@ function Select-MenuOption {
                 if ($selectedIndex -gt $maxIndex) { $selectedIndex = 0 }
             }
             "Enter" {
+                Write-Host ""
                 return $selectableItems[$selectedIndex].Key
+            }
+            "Escape" {
+                Write-Host ""
+                return "0"  # Exit on Escape
             }
             default {
                 # Check if it's a number key for direct selection
                 $char = $key.KeyChar
                 $directItem = $selectableItems | Where-Object { $_.Key -eq $char }
                 if ($directItem) {
+                    Write-Host ""
                     return $char
                 }
             }
