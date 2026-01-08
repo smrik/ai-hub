@@ -223,17 +223,25 @@ function Select-MenuOption {
             Write-Host -NoNewline $clearLine
             
             if ($item.Key -eq "") {
-                # Section header/divider
-                Write-Host "$gray$v$reset  $dim$($item.Label)$(" " * ($innerWidth - $item.Label.Length - 2))$reset$gray$v$reset"
+                # Section header/divider - no emoji
+                $labelLen = $item.Label.Length
+                $pad = $innerWidth - $labelLen - 2
+                if ($pad -lt 0) { $pad = 0 }
+                Write-Host "$gray$v$reset  $dim$($item.Label)$reset$(" " * $pad)$gray$v$reset"
             }
             else {
                 $isSelected = ($selectableIndex -eq $selectedIndex)
-                $prefix = if ($isSelected) { "$cyan>" } else { " " }
-                $labelColor = if ($isSelected) { $white } else { $gray }
-                $itemText = "$($item.Icon) $($item.Label)"
-                $padding = $innerWidth - $itemText.Length - 2
+                $prefix = if ($isSelected) { "$bold$cyan>" } else { " " }
+                $labelColor = if ($isSelected) { "$bold$white" } else { $reset }
                 
-                Write-Host "$gray$v$reset $prefix $labelColor$itemText$reset$(" " * $padding)$gray$v$reset"
+                # Emoji takes 2 display columns, so account for that
+                $icon = $item.Icon
+                $label = $item.Label
+                $displayLen = $label.Length + 3  # icon(2) + space(1)
+                $pad = $innerWidth - $displayLen - 4  # prefix(2) + margins(2)
+                if ($pad -lt 0) { $pad = 0 }
+                
+                Write-Host "$gray$v$reset $prefix $icon $labelColor$label$reset$(" " * $pad)$gray$v$reset"
                 $selectableIndex++
             }
         }
