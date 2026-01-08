@@ -152,67 +152,98 @@ function Write-Divider {
     Write-Styled -Text ($b.Horizontal * ($Width - 2)) -Color "BrightBlack" -NoNewLine
     Write-Styled -Text $b.RightT -Color "BrightBlack"
 }
-# Arrow key menu selection with proper in-place updates
+# Arrow key menu selection - Claude Code style
 function Select-MenuOption {
     param(
         [array]$MenuItems,
-        [string]$Prompt = "Select option"
+        [string]$Title = "Menu",
+        [string]$Subtitle = ""
     )
     
-    # Filter to only selectable items (those with a Key)
+    # Filter to only selectable items
     $selectableItems = $MenuItems | Where-Object { $_.Key -ne "" }
     $selectedIndex = 0
     $maxIndex = $selectableItems.Count - 1
     
-    # ANSI escape codes
+    # ANSI codes
     $esc = [char]27
     $saveCursor = "$esc[s"
-    $restoreCursor = "$esc[u"
+    $restoreCursor = "$esc[u" 
     $clearLine = "$esc[2K"
+    $dim = "$esc[2m"
     $reset = "$esc[0m"
+    $bold = "$esc[1m"
+    $cyan = "$esc[36m"
+    $white = "$esc[97m"
+    $gray = "$esc[90m"
     
-    # Save cursor position before first draw
+    # Box chars
+    $tl = "╭"; $tr = "╮"; $bl = "╰"; $br = "╯"; $h = "─"; $v = "│"
+    
+    # Calculate box width
+    $maxLen = ($MenuItems | ForEach-Object { $_.Label.Length } | Measure-Object -Maximum).Maximum
+    $boxWidth = [Math]::Max($maxLen + 6, 50)
+    $innerWidth = $boxWidth - 2
+    
+    # Save cursor
     Write-Host -NoNewline $saveCursor
-    
-    # Initial draw
     $firstDraw = $true
     
     while ($true) {
         if (-not $firstDraw) {
-            # Restore cursor to saved position and redraw
             Write-Host -NoNewline $restoreCursor
         }
         $firstDraw = $false
         
-        Write-Host ""
+        # Top border with title
+        Write-Host -NoNewline $clearLine
+        $titleText = " $Title "
+        $leftPad = 2
+        $rightPad = $innerWidth - $leftPad - $titleText.Length
+        Write-Host "$gray$tl$($h * $leftPad)$reset$bold$white$titleText$reset$gray$($h * $rightPad)$tr$reset"
+        
+        # Subtitle
+        if ($Subtitle) {
+            Write-Host -NoNewline $clearLine
+            Write-Host "$gray$v$reset $dim$Subtitle$(" " * ($innerWidth - $Subtitle.Length - 1))$reset$gray$v$reset"
+        }
+        
+        # Empty line
+        Write-Host -NoNewline $clearLine
+        Write-Host "$gray$v$(" " * $innerWidth)$v$reset"
+        
+        # Menu items
         $selectableIndex = 0
         foreach ($item in $MenuItems) {
-            # Clear the line first
             Write-Host -NoNewline $clearLine
             
             if ($item.Key -eq "") {
-                # Divider
-                Write-Styled -Text "  $($item.Label)" -Color $item.Color
+                # Section header/divider
+                Write-Host "$gray$v$reset  $dim$($item.Label)$(" " * ($innerWidth - $item.Label.Length - 2))$reset$gray$v$reset"
             }
             else {
                 $isSelected = ($selectableIndex -eq $selectedIndex)
-                $prefix = if ($isSelected) { "▶ " } else { "  " }
-                $bg = if ($isSelected) { "$esc[48;5;236m" } else { "" }
+                $prefix = if ($isSelected) { "$cyan>" } else { " " }
+                $labelColor = if ($isSelected) { $white } else { $gray }
+                $itemText = "$($item.Icon) $($item.Label)"
+                $padding = $innerWidth - $itemText.Length - 2
                 
-                Write-Host -NoNewline "$bg"
-                Write-Styled -Text $prefix -Color $(if ($isSelected) { "BrightCyan" } else { "BrightBlack" }) -NoNewLine
-                Write-Styled -Text "[" -Color "BrightBlack" -NoNewLine
-                Write-Styled -Text $item.Key -Color $(if ($isSelected) { "BrightCyan" } else { "BrightBlack" }) -Bold -NoNewLine
-                Write-Styled -Text "] " -Color "BrightBlack" -NoNewLine
-                Write-Styled -Text "$($item.Icon) " -NoNewLine
-                Write-Styled -Text $item.Label -Color $(if ($isSelected) { "BrightWhite" } else { $item.Color })
-                Write-Host -NoNewline $reset
+                Write-Host "$gray$v$reset $prefix $labelColor$itemText$reset$(" " * $padding)$gray$v$reset"
                 $selectableIndex++
             }
         }
-        Write-Host ""
+        
+        # Empty line
         Write-Host -NoNewline $clearLine
-        Write-Styled -Text "  ↑↓ Navigate  Enter Select  # Direct" -Color "Dim"
+        Write-Host "$gray$v$(" " * $innerWidth)$v$reset"
+        
+        # Bottom border
+        Write-Host -NoNewline $clearLine
+        Write-Host "$gray$bl$($h * $innerWidth)$br$reset"
+        
+        # Footer
+        Write-Host -NoNewline $clearLine
+        Write-Host "$dim  ↑↓ to navigate · Enter to select · Esc to go back$reset"
         
         # Read key
         $key = [Console]::ReadKey($true)
@@ -232,10 +263,9 @@ function Select-MenuOption {
             }
             "Escape" {
                 Write-Host ""
-                return "0"  # Exit on Escape
+                return "0"
             }
             default {
-                # Check if it's a number key for direct selection
                 $char = $key.KeyChar
                 $directItem = $selectableItems | Where-Object { $_.Key -eq $char }
                 if ($directItem) {
@@ -249,69 +279,42 @@ function Select-MenuOption {
 
 function Write-Banner {
     Clear-Host
-    $banner = @"
-
-    $($script:Colors.Cyan)$($script:Colors.Bold)╭─────────────────────────────────────╮$($script:Colors.Reset)
-    $($script:Colors.Cyan)$($script:Colors.Bold)│$($script:Colors.Reset)  $($script:Colors.BrightCyan)🤖 AI Hub$($script:Colors.Reset) $($script:Colors.Dim)- Agent Manager$($script:Colors.Reset)      $($script:Colors.Cyan)$($script:Colors.Bold)│$($script:Colors.Reset)
-    $($script:Colors.Cyan)$($script:Colors.Bold)╰─────────────────────────────────────╯$($script:Colors.Reset)
-
-"@
-    Write-Host $banner
-    
-    # Show current context
-    $project = (Get-Location).Path
-    Write-Styled -Text "  📂 " -Color "Yellow" -NoNewLine
-    Write-Styled -Text $project -Color "White"
-    
-    # Show session state if exists
-    $sessionFile = Join-Path $project ".agent\session-state.md"
-    if (Test-Path $sessionFile) {
-        $content = Get-Content $sessionFile -Raw
-        if ($content -match '\*\*Agent:\*\* (.+)') {
-            $lastAgent = $Matches[1]
-            Write-Styled -Text "  📋 " -Color "Blue" -NoNewLine
-            Write-Styled -Text "Last session: " -Color "Dim" -NoNewLine
-            Write-Styled -Text $lastAgent -Color "White"
-        }
-    }
     Write-Host ""
 }
 
 function Show-MainMenu {
     $menuItems = @(
-        @{ Key = "1"; Label = "Launch Claude Code"; Icon = "🤖"; Color = "Cyan" }
-        @{ Key = "2"; Label = "Launch Gemini CLI"; Icon = "✨"; Color = "Magenta" }
-        @{ Key = "3"; Label = "Launch Codex CLI"; Icon = "🚀"; Color = "Green" }
-        @{ Key = ""; Label = "─────────────────────────────────"; Icon = ""; Color = "BrightBlack" }
-        @{ Key = "4"; Label = "Sync all configs"; Icon = "🔄"; Color = "Yellow" }
-        @{ Key = "5"; Label = "Edit AGENTS.md"; Icon = "📝"; Color = "Blue" }
-        @{ Key = "6"; Label = "View session state"; Icon = "📋"; Color = "Cyan" }
-        @{ Key = "7"; Label = "View sync status"; Icon = "📊"; Color = "Green" }
-        @{ Key = ""; Label = "─────────────────────────────────"; Icon = ""; Color = "BrightBlack" }
-        @{ Key = "0"; Label = "Exit"; Icon = "👋"; Color = "Red" }
+        @{ Key = ""; Label = "Agents"; Icon = ""; Color = "" }
+        @{ Key = "1"; Label = "Claude Code"; Icon = "🤖" }
+        @{ Key = "2"; Label = "Gemini CLI"; Icon = "✨" }
+        @{ Key = "3"; Label = "Codex CLI"; Icon = "🚀" }
+        @{ Key = ""; Label = "Tools"; Icon = ""; Color = "" }
+        @{ Key = "4"; Label = "Sync all configs"; Icon = "🔄" }
+        @{ Key = "5"; Label = "Edit AGENTS.md"; Icon = "📝" }
+        @{ Key = "6"; Label = "View session state"; Icon = "📋" }
+        @{ Key = "7"; Label = "View sync status"; Icon = "📊" }
+        @{ Key = ""; Label = ""; Icon = ""; Color = "" }
+        @{ Key = "0"; Label = "Exit"; Icon = "👋" }
     )
     
-    return Select-MenuOption -MenuItems $menuItems -Prompt "Select option"
+    $project = (Get-Location).Path
+    return Select-MenuOption -MenuItems $menuItems -Title "AI Hub" -Subtitle $project
 }
 
 function Show-PostSessionMenu {
     param([string]$AgentName)
     
-    Write-Host ""
-    Write-Styled -Text "  Session ended: " -Color "Dim" -NoNewLine
-    Write-Styled -Text $AgentName -Color "Cyan" -Bold
-    Write-Host ""
-    
     $menuItems = @(
-        @{ Key = "1"; Label = "Handoff to another agent"; Icon = "🔄"; Color = "Yellow" }
-        @{ Key = "2"; Label = "Sync configs"; Icon = "🔗"; Color = "Green" }
-        @{ Key = "3"; Label = "Save session notes"; Icon = "📝"; Color = "Blue" }
-        @{ Key = ""; Label = "─────────────────────────────────"; Icon = ""; Color = "BrightBlack" }
-        @{ Key = "4"; Label = "Return to main menu"; Icon = "🏠"; Color = "Cyan" }
-        @{ Key = "0"; Label = "Exit"; Icon = "👋"; Color = "Red" }
+        @{ Key = ""; Label = "Actions"; Icon = ""; Color = "" }
+        @{ Key = "1"; Label = "Handoff to another agent"; Icon = "🔄" }
+        @{ Key = "2"; Label = "Sync configs"; Icon = "🔗" }
+        @{ Key = "3"; Label = "Save session notes"; Icon = "📝" }
+        @{ Key = ""; Label = ""; Icon = ""; Color = "" }
+        @{ Key = "4"; Label = "Return to main menu"; Icon = "🏠" }
+        @{ Key = "0"; Label = "Exit"; Icon = "👋" }
     )
     
-    return Select-MenuOption -MenuItems $menuItems -Prompt "Select action"
+    return Select-MenuOption -MenuItems $menuItems -Title "Session Ended" -Subtitle "Last: $AgentName"
 }
 
 function Invoke-AgentSession {
