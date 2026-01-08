@@ -12,11 +12,38 @@ If present, read it to understand:
 - Recent changes made
 - Known blockers or issues
 
-**Before ending a session** (or when user switches agents), offer to update `.agent/session-state.md` with:
-- Current task summary
-- Recent actions taken
-- Next steps
-- Any blockers
+**Before ending a session** (or when user says "handoff", "switch agent", or exits), **you MUST update `.agent/session-state.md`** with the following format:
+
+```markdown
+# Session State
+
+**Updated:** [timestamp]
+**Agent:** [Your CLI name: Claude Code / Gemini CLI / Codex CLI]
+**Project:** [Current working directory]
+
+## Current Task
+[Brief description of the main task/goal]
+
+## Recent Actions
+- [Action 1]
+- [Action 2]
+- [Action 3]
+
+## Next Steps
+- [Next step 1]
+- [Next step 2]
+
+## Known Issues
+- [Any blockers or issues encountered]
+
+## Notes
+[Any additional context the next agent should know]
+```
+
+**IMPORTANT:** This handoff is critical for multi-agent workflows. The user switches between Claude, Gemini, and Codex based on rate limits and task type. Each agent should:
+1. Read session-state.md at session start (if it exists)
+2. Offer to write session-state.md when the user ends the session or says "handoff"
+3. Keep the summary concise (avoid filling context window)
 
 This enables seamless handoffs between Claude Code, Gemini CLI, and Codex CLI.
 

@@ -153,6 +153,77 @@ function Write-Divider {
     Write-Styled -Text $b.RightT -Color "BrightBlack"
 }
 
+# Arrow key menu selection
+function Select-MenuOption {
+    param(
+        [array]$MenuItems,
+        [string]$Prompt = "Select option"
+    )
+    
+    # Filter to only selectable items (those with a Key)
+    $selectableItems = $MenuItems | Where-Object { $_.Key -ne "" }
+    $selectedIndex = 0
+    $maxIndex = $selectableItems.Count - 1
+    
+    while ($true) {
+        # Clear and redraw menu
+        $cursorTop = [Console]::CursorTop - $MenuItems.Count - 2
+        if ($cursorTop -lt 0) { $cursorTop = 0 }
+        [Console]::SetCursorPosition(0, $cursorTop)
+        
+        Write-Host ""
+        $selectableIndex = 0
+        foreach ($item in $MenuItems) {
+            if ($item.Key -eq "") {
+                # Divider
+                Write-Styled -Text "  $($item.Label)" -Color $item.Color
+            }
+            else {
+                $isSelected = ($selectableIndex -eq $selectedIndex)
+                $prefix = if ($isSelected) { "▶ " } else { "  " }
+                $bgColor = if ($isSelected) { "`e[48;5;236m" } else { "" }
+                
+                Write-Host -NoNewline $bgColor
+                Write-Styled -Text $prefix -Color $(if ($isSelected) { "BrightCyan" } else { "BrightBlack" }) -NoNewLine
+                Write-Styled -Text "[" -Color "BrightBlack" -NoNewLine
+                Write-Styled -Text $item.Key -Color $(if ($isSelected) { "BrightCyan" } else { "BrightBlack" }) -Bold -NoNewLine
+                Write-Styled -Text "] " -Color "BrightBlack" -NoNewLine
+                Write-Styled -Text "$($item.Icon) " -NoNewLine
+                Write-Styled -Text $item.Label -Color $(if ($isSelected) { "BrightWhite" } else { $item.Color })
+                $selectableIndex++
+            }
+        }
+        Write-Host ""
+        Write-Styled -Text "  ↑↓ Navigate  Enter Select  # Direct" -Color "Dim"
+        Write-Host ""
+        
+        # Read key
+        $key = [Console]::ReadKey($true)
+        
+        switch ($key.Key) {
+            "UpArrow" {
+                $selectedIndex--
+                if ($selectedIndex -lt 0) { $selectedIndex = $maxIndex }
+            }
+            "DownArrow" {
+                $selectedIndex++
+                if ($selectedIndex -gt $maxIndex) { $selectedIndex = 0 }
+            }
+            "Enter" {
+                return $selectableItems[$selectedIndex].Key
+            }
+            default {
+                # Check if it's a number key for direct selection
+                $char = $key.KeyChar
+                $directItem = $selectableItems | Where-Object { $_.Key -eq $char }
+                if ($directItem) {
+                    return $char
+                }
+            }
+        }
+    }
+}
+
 function Write-Banner {
     Clear-Host
     $banner = @"
@@ -197,20 +268,7 @@ function Show-MainMenu {
         @{ Key = "0"; Label = "Exit"; Icon = "👋"; Color = "Red" }
     )
     
-    Write-Host ""
-    foreach ($item in $menuItems) {
-        if ($item.Key -eq "") {
-            Write-Styled -Text "  $($item.Label)" -Color $item.Color
-        }
-        else {
-            Write-Styled -Text "  [" -Color "BrightBlack" -NoNewLine
-            Write-Styled -Text $item.Key -Color "BrightCyan" -Bold -NoNewLine
-            Write-Styled -Text "] " -Color "BrightBlack" -NoNewLine
-            Write-Styled -Text "$($item.Icon) " -NoNewLine
-            Write-Styled -Text $item.Label -Color $item.Color
-        }
-    }
-    Write-Host ""
+    return Select-MenuOption -MenuItems $menuItems -Prompt "Select option"
 }
 
 function Show-PostSessionMenu {
@@ -225,18 +283,12 @@ function Show-PostSessionMenu {
         @{ Key = "1"; Label = "Handoff to another agent"; Icon = "🔄"; Color = "Yellow" }
         @{ Key = "2"; Label = "Sync configs"; Icon = "🔗"; Color = "Green" }
         @{ Key = "3"; Label = "Save session notes"; Icon = "📝"; Color = "Blue" }
+        @{ Key = ""; Label = "─────────────────────────────────"; Icon = ""; Color = "BrightBlack" }
         @{ Key = "4"; Label = "Return to main menu"; Icon = "🏠"; Color = "Cyan" }
         @{ Key = "0"; Label = "Exit"; Icon = "👋"; Color = "Red" }
     )
     
-    foreach ($item in $menuItems) {
-        Write-Styled -Text "  [" -Color "BrightBlack" -NoNewLine
-        Write-Styled -Text $item.Key -Color "BrightCyan" -Bold -NoNewLine
-        Write-Styled -Text "] " -Color "BrightBlack" -NoNewLine
-        Write-Styled -Text "$($item.Icon) " -NoNewLine
-        Write-Styled -Text $item.Label -Color $item.Color
-    }
-    Write-Host ""
+    return Select-MenuOption -MenuItems $menuItems -Prompt "Select action"
 }
 
 function Invoke-AgentSession {
@@ -277,14 +329,11 @@ function Invoke-AgentSession {
     # Show post-session menu
     $continue = $true
     while ($continue) {
-        Show-PostSessionMenu -AgentName $agent.Name
-        
-        Write-Styled -Text "  Select option: " -Color "Dim" -NoNewLine
-        $choice = Read-Host
+        $choice = Show-PostSessionMenu -AgentName $agent.Name
         
         switch ($choice) {
             "1" { Invoke-Handoff -FromAgent $agent.Name; $continue = $false }
-            "2" { Invoke-Sync }
+            "2" { Invoke-Sync; Write-Host ""; Write-Styled -Text "  Press Enter to continue..." -Color "Dim" -NoNewLine; Read-Host }
             "3" { Invoke-SaveNotes }
             "4" { $continue = $false }
             "0" { $continue = $false; $script:ExitApp = $true }
@@ -462,10 +511,7 @@ function Start-AiHub {
     
     while (-not $script:ExitApp) {
         Write-Banner
-        Show-MainMenu
-        
-        Write-Styled -Text "  Select option: " -Color "Dim" -NoNewLine
-        $choice = Read-Host
+        $choice = Show-MainMenu
         
         switch ($choice) {
             "1" { Invoke-AgentSession -AgentKey "claude" }
