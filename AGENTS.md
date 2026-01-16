@@ -53,6 +53,7 @@ This enables seamless handoffs between Claude Code, Gemini CLI, and Codex CLI.
 - Claude Code (`.claude/`) - Anthropic Claude Sonnet 4.5
 - Gemini CLI (`.gemini/`) - Google Gemini 2.0 Flash Thinking
 - Codex CLI (`.codex/`) - OpenAI GPT-5.2 Codex
+- Antigravity (`.gemini/antigravity/`) - Gemini's lightweight code editor
 
 **MCP Servers (Shared):**
 - Perplexity - Research and web search
@@ -61,6 +62,7 @@ This enables seamless handoffs between Claude Code, Gemini CLI, and Codex CLI.
 - Excel MCP - Spreadsheet operations
 - MCP Gateway - Multi-model routing
 - Obsidian Automation - Obsidian plugin testing
+- Sequential Thinking - Step-by-step reasoning
 
 **Sync Command:** Run `sync-agents` to synchronize configs across all CLIs.
 
@@ -233,6 +235,7 @@ codex chat  # or gemini chat
 
 ---
 
-**Last Updated:** 2026-01-08
+**Last Updated:** 2026-01-16
 **Maintained By:** User + AI Coding Agents (Collaborative)
 **Sync Source:** `~/.agent-sync/AGENTS.md`
+**Skills Directory:** `~/.agent-sync/skills/`

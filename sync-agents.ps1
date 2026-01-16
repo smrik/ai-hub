@@ -42,6 +42,7 @@ $SessionTemplate = "$SyncRoot\templates\session-state.md"
 $ClaudeDir = "$env:USERPROFILE\.claude"
 $GeminiDir = "$env:USERPROFILE\.gemini"
 $CodexDir = "$env:USERPROFILE\.codex"
+$AntigravityDir = "$env:USERPROFILE\.gemini\antigravity"
 
 function Write-Info { param($msg) Write-Host "  [INFO] $msg" -ForegroundColor Cyan }
 function Write-Success { param($msg) Write-Host "  [OK] $msg" -ForegroundColor Green }
@@ -92,71 +93,113 @@ unified_exec = true
 # Sync AGENTS.md to all CLIs
 function Sync-AgentsMd {
     Write-Info "Syncing AGENTS.md..."
-    
+
     if (-not (Test-Path $AgentsMd)) {
         Write-Err "Master AGENTS.md not found at $AgentsMd"
         return $false
     }
-    
+
+    $allSuccess = $true
+
     # Copy to Claude
-    Copy-Item $AgentsMd "$ClaudeDir\AGENTS.md" -Force
-    Write-Success "Copied to .claude/AGENTS.md"
-    
+    try {
+        if (-not (Test-Path $ClaudeDir)) { New-Item -ItemType Directory -Path $ClaudeDir -Force | Out-Null }
+        Copy-Item $AgentsMd "$ClaudeDir\AGENTS.md" -Force -ErrorAction Stop
+        Write-Success "Copied to .claude/AGENTS.md"
+    }
+    catch {
+        Write-Err "Failed to copy to .claude/: $_"
+        $allSuccess = $false
+    }
+
     # Copy to Gemini
-    Copy-Item $AgentsMd "$GeminiDir\AGENTS.md" -Force
-    Write-Success "Copied to .gemini/AGENTS.md"
-    
+    try {
+        if (-not (Test-Path $GeminiDir)) { New-Item -ItemType Directory -Path $GeminiDir -Force | Out-Null }
+        Copy-Item $AgentsMd "$GeminiDir\AGENTS.md" -Force -ErrorAction Stop
+        Write-Success "Copied to .gemini/AGENTS.md"
+    }
+    catch {
+        Write-Err "Failed to copy to .gemini/: $_"
+        $allSuccess = $false
+    }
+
     # Copy to Codex
-    Copy-Item $AgentsMd "$CodexDir\AGENTS.md" -Force
-    Write-Success "Copied to .codex/AGENTS.md"
-    
+    try {
+        if (-not (Test-Path $CodexDir)) { New-Item -ItemType Directory -Path $CodexDir -Force | Out-Null }
+        Copy-Item $AgentsMd "$CodexDir\AGENTS.md" -Force -ErrorAction Stop
+        Write-Success "Copied to .codex/AGENTS.md"
+    }
+    catch {
+        Write-Err "Failed to copy to .codex/: $_"
+        $allSuccess = $false
+    }
+
     # Also update user home for backward compat
-    Copy-Item $AgentsMd "$env:USERPROFILE\AGENTS.md" -Force
-    Write-Success "Copied to ~/AGENTS.md"
-    
-    return $true
+    try {
+        Copy-Item $AgentsMd "$env:USERPROFILE\AGENTS.md" -Force -ErrorAction Stop
+        Write-Success "Copied to ~/AGENTS.md"
+    }
+    catch {
+        Write-Err "Failed to copy to ~/: $_"
+        $allSuccess = $false
+    }
+
+    return $allSuccess
 }
 
 # Sync MCP servers to all CLIs
 function Sync-McpServers {
     Write-Info "Syncing MCP servers..."
-    
+
     if (-not (Test-Path $McpConfig)) {
         Write-Err "Master MCP config not found at $McpConfig"
         return $false
     }
-    
-    $mcpJson = Get-Content $McpConfig -Raw | ConvertFrom-Json -AsHashtable
-    $mcpServers = $mcpJson.mcpServers
-    
+
+    $allSuccess = $true
+
+    try {
+        $mcpJson = Get-Content $McpConfig -Raw | ConvertFrom-Json -AsHashtable
+        $mcpServers = $mcpJson.mcpServers
+    }
+    catch {
+        Write-Err "Failed to parse MCP config: $_"
+        return $false
+    }
+
     # Update Gemini settings.json
-    $geminiSettings = "$GeminiDir\settings.json"
-    if (Test-Path $geminiSettings) {
-        $gemini = Get-Content $geminiSettings -Raw | ConvertFrom-Json -AsHashtable
-        
+    try {
+        $geminiSettings = "$GeminiDir\settings.json"
+        if (Test-Path $geminiSettings) {
+            $gemini = Get-Content $geminiSettings -Raw | ConvertFrom-Json -AsHashtable
+        }
+        else {
+            $gemini = @{}
+        }
+
         # Gemini has stricter validation - filter out unsupported keys
         $geminiMcpServers = @{}
         $unsupportedKeys = @("name", "type", "startup_timeout_ms")
-        
+
         foreach ($serverName in $mcpServers.Keys) {
             $server = $mcpServers[$serverName]
             $filteredServer = @{}
-            
+
             foreach ($key in $server.Keys) {
                 if ($key -notin $unsupportedKeys) {
                     $filteredServer[$key] = $server[$key]
                 }
             }
-            
+
             # Skip SSE-type servers (mcp-gateway) for Gemini as they require 'url' which isn't standard
             if ($server.ContainsKey("url")) {
                 Write-Warn "Skipping SSE server '$serverName' for Gemini (not supported)"
                 continue
             }
-            
+
             $geminiMcpServers[$serverName] = $filteredServer
         }
-        
+
         $gemini.mcpServers = $geminiMcpServers
         # Ensure contextFileName is set at root (not nested under context)
         if (-not $gemini.ContainsKey("contextFileName")) {
@@ -169,27 +212,96 @@ function Sync-McpServers {
         $gemini | ConvertTo-Json -Depth 10 | Set-Content $geminiSettings -Encoding UTF8
         Write-Success "Updated .gemini/settings.json"
     }
-    
+    catch {
+        Write-Err "Failed to update Gemini settings: $_"
+        $allSuccess = $false
+    }
+
     # Update Codex config.toml
-    $codexConfig = "$CodexDir\config.toml"
-    $toml = ConvertTo-CodexToml -McpServers $mcpServers
-    $toml | Set-Content $codexConfig -Encoding UTF8
-    Write-Success "Updated .codex/config.toml"
-    
+    try {
+        if (-not (Test-Path $CodexDir)) { New-Item -ItemType Directory -Path $CodexDir -Force | Out-Null }
+        $codexConfig = "$CodexDir\config.toml"
+        $toml = ConvertTo-CodexToml -McpServers $mcpServers
+        $toml | Set-Content $codexConfig -Encoding UTF8
+        Write-Success "Updated .codex/config.toml"
+    }
+    catch {
+        Write-Err "Failed to update Codex config: $_"
+        $allSuccess = $false
+    }
+
     # Update Claude .claude.json (global)
-    $claudeGlobal = "$env:USERPROFILE\.claude.json"
-    if (Test-Path $claudeGlobal) {
-        $claude = Get-Content $claudeGlobal -Raw | ConvertFrom-Json -AsHashtable
-        $claude.mcpServers = $mcpServers
+    try {
+        $claudeGlobal = "$env:USERPROFILE\.claude.json"
+        if (Test-Path $claudeGlobal) {
+            $claude = Get-Content $claudeGlobal -Raw | ConvertFrom-Json -AsHashtable
+            $claude.mcpServers = $mcpServers
+        }
+        else {
+            $claude = @{ mcpServers = $mcpServers }
+        }
         $claude | ConvertTo-Json -Depth 10 | Set-Content $claudeGlobal -Encoding UTF8
         Write-Success "Updated ~/.claude.json"
     }
-    else {
-        @{ mcpServers = $mcpServers } | ConvertTo-Json -Depth 10 | Set-Content $claudeGlobal -Encoding UTF8
-        Write-Success "Created ~/.claude.json"
+    catch {
+        Write-Err "Failed to update Claude config: $_"
+        $allSuccess = $false
     }
-    
-    return $true
+
+    return $allSuccess
+}
+
+# Sync MCP servers to Antigravity
+function Sync-Antigravity {
+    Write-Info "Syncing to Antigravity..."
+
+    if (-not (Test-Path $AntigravityDir)) {
+        Write-Warn "Antigravity directory not found at $AntigravityDir"
+        return $true  # Not an error, just not installed
+    }
+
+    if (-not (Test-Path $McpConfig)) {
+        Write-Err "Master MCP config not found at $McpConfig"
+        return $false
+    }
+
+    try {
+        $mcpJson = Get-Content $McpConfig -Raw | ConvertFrom-Json -AsHashtable
+        $mcpServers = $mcpJson.mcpServers
+
+        # Antigravity uses a simpler format - filter and adapt servers
+        $antigravityMcp = @{ mcpServers = @{} }
+        $unsupportedKeys = @("name", "type", "startup_timeout_ms", "url")
+
+        foreach ($serverName in $mcpServers.Keys) {
+            $server = $mcpServers[$serverName]
+
+            # Skip SSE-type servers (url-based like mcp-gateway)
+            if ($server.ContainsKey("url")) {
+                Write-Warn "Skipping SSE server '$serverName' for Antigravity"
+                continue
+            }
+
+            $filteredServer = @{}
+            foreach ($key in $server.Keys) {
+                if ($key -notin $unsupportedKeys) {
+                    $filteredServer[$key] = $server[$key]
+                }
+            }
+
+            $antigravityMcp.mcpServers[$serverName] = $filteredServer
+        }
+
+        $antigravityConfig = "$AntigravityDir\mcp_config.json"
+        $antigravityMcp | ConvertTo-Json -Depth 10 | Set-Content $antigravityConfig -Encoding UTF8
+        Write-Success "Updated .gemini/antigravity/mcp_config.json"
+
+        return $true
+    }
+    catch {
+        Write-Err "Failed to sync Antigravity: $_"
+        return $false
+    }
 }
 
 # Update session state for handoff
@@ -240,6 +352,7 @@ function Show-Status {
     if (Test-Path "$ClaudeDir\AGENTS.md") { Write-Success "Claude: AGENTS.md synced" } else { Write-Warn "Claude: AGENTS.md not synced" }
     if (Test-Path "$GeminiDir\AGENTS.md") { Write-Success "Gemini: AGENTS.md synced" } else { Write-Warn "Gemini: AGENTS.md not synced" }
     if (Test-Path "$CodexDir\AGENTS.md") { Write-Success "Codex: AGENTS.md synced" } else { Write-Warn "Codex: AGENTS.md not synced" }
+    if (Test-Path "$AntigravityDir\mcp_config.json") { Write-Success "Antigravity: MCP config synced" } else { Write-Warn "Antigravity: MCP config not synced" }
     
     Write-Host "`n  Project Session:" -ForegroundColor Yellow
     $sessionFile = Join-Path $Project ".agent\session-state.md"
@@ -273,6 +386,7 @@ if ($Handoff) {
 $success = $true
 $success = $success -and (Sync-AgentsMd)
 $success = $success -and (Sync-McpServers)
+$success = $success -and (Sync-Antigravity)
 
 if ($success) {
     Write-Host "`n  All configs synced successfully!" -ForegroundColor Green

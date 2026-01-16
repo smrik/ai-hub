@@ -1,0 +1,121 @@
+param(
+  [switch]$WhatIf
+)
+
+$ErrorActionPreference = "Stop"
+$userHome = $env:USERPROFILE
+$shared = Join-Path $userHome ".ai-shared"
+$sharedClaudeConfigPath = Join-Path $shared "claude\config.json"
+$sharedGeminiSettingsPath = Join-Path $shared "gemini\settings.json"
+$sharedCodexConfigPath = Join-Path $shared "codex\config.toml"
+
+function Escape-TomlString($s) {
+  if ($null -eq $s) { return "" }
+  $s = [string]$s
+  return ($s -replace '\\', '\\\\' -replace '"', '\\"')
+}
+
+function Get-EnvSpec($envValue) {
+  $envVars = @()
+  $envMap = @{}
+
+  if ($null -eq $envValue) {
+    return @{ envVars = $envVars; envMap = $envMap }
+  }
+
+  if ($envValue -is [string]) {
+    $envVars = @($envValue)
+  } elseif ($envValue -is [System.Array]) {
+    $envVars = @($envValue)
+  } elseif ($envValue -is [psobject]) {
+    $props = $envValue.PSObject.Properties
+    $hasValues = $false
+    foreach ($p in $props) {
+      if ($null -ne $p.Value -and $p.Value -ne "") {
+        $hasValues = $true
+        break
+      }
+    }
+    if ($hasValues) {
+      foreach ($p in $props) {
+        $envMap[$p.Name] = $p.Value
+      }
+    } else {
+      $envVars = $props.Name
+    }
+  }
+
+  return @{ envVars = $envVars; envMap = $envMap }
+}
+
+# Load MCP sources
+$claudeConfigPath = Join-Path $userHome ".claude\config.json"
+$claudeGlobalPath = Join-Path $userHome ".claude.json"
+$claudeConfig = Get-Content -Raw $claudeConfigPath | ConvertFrom-Json
+$claudeGlobal = Get-Content -Raw $claudeGlobalPath | ConvertFrom-Json
+
+$mcp = @{}
+foreach ($source in @($claudeConfig.mcpServers, $claudeGlobal.mcpServers)) {
+  if ($null -ne $source) {
+    foreach ($prop in $source.PSObject.Properties) {
+      $mcp[$prop.Name] = $prop.Value
+    }
+  }
+}
+
+if (-not $WhatIf) {
+  # Update shared Claude config (preserve other fields)
+  $sharedClaudeConfig = Get-Content -Raw $sharedClaudeConfigPath | ConvertFrom-Json
+  $sharedClaudeConfig | Add-Member -NotePropertyName "mcpServers" -NotePropertyValue $mcp -Force
+  $sharedClaudeConfig | ConvertTo-Json -Depth 20 | Set-Content -Path $sharedClaudeConfigPath -Encoding UTF8
+
+  # Update shared Gemini settings (preserve other fields)
+  $sharedGeminiSettings = Get-Content -Raw $sharedGeminiSettingsPath | ConvertFrom-Json
+  $sharedGeminiSettings.contextFileName = "AGENTS.md"
+  $sharedGeminiSettings.mcpServers = $mcp
+  $sharedGeminiSettings | ConvertTo-Json -Depth 20 | Set-Content -Path $sharedGeminiSettingsPath -Encoding UTF8
+
+  # Generate Codex config.toml
+  $lines = New-Object System.Collections.Generic.List[string]
+  foreach ($prop in $mcp.PSObject.Properties) {
+    $name = $prop.Name
+    $s = $prop.Value
+    $lines.Add("[mcp_servers.$name]")
+
+    if ($s.url) {
+      $lines.Add('url = "' + (Escape-TomlString $s.url) + '"')
+    }
+    if ($s.command) {
+      $lines.Add('command = "' + (Escape-TomlString $s.command) + '"')
+    }
+    if ($s.args) {
+      $args = $s.args | ForEach-Object { '"' + (Escape-TomlString $_) + '"' }
+      $lines.Add("args = [" + ($args -join ", ") + "]")
+    }
+    if ($s.cwd) {
+      $lines.Add('cwd = "' + (Escape-TomlString $s.cwd) + '"')
+    }
+
+    $envSpec = Get-EnvSpec $s.env
+    if ($envSpec.envMap.Count -gt 0) {
+      $lines.Add("")
+      $lines.Add("[mcp_servers.$name.env]")
+      foreach ($key in $envSpec.envMap.Keys) {
+        $lines.Add($key + ' = "' + (Escape-TomlString $envSpec.envMap[$key]) + '"')
+      }
+    } elseif ($envSpec.envVars.Count -gt 0) {
+      $vars = $envSpec.envVars | ForEach-Object { '"' + (Escape-TomlString $_) + '"' }
+      $lines.Add('env_vars = [' + ($vars -join ', ') + ']')
+    }
+
+    $lines.Add("")
+  }
+
+  $lines | Set-Content -Path $sharedCodexConfigPath -Encoding UTF8
+}
+
+$serverCount = @($mcp.Keys).Count
+Write-Host "Synced MCP servers: $serverCount"
+Write-Host "Updated: $sharedClaudeConfigPath"
+Write-Host "Updated: $sharedGeminiSettingsPath"
+Write-Host "Updated: $sharedCodexConfigPath"
